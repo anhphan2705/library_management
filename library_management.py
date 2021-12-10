@@ -115,8 +115,19 @@ def update_storage(calendar, day, log_book):
     calendar.update({day:data})
     
     return calendar
+
+# def update_storage(calendar, day, log_book):
+#     if day == 0:
+#         data = calendar.get(day)
+#     else:
+#         data = calendar.get(day-1)
+#     data[0] = log_book.copy()
+#     data[0][1] = data[0][1].copy()
+#     calendar.update({day:data})
+
+#     return calendar
         
-def extract_borrow_data(log):
+def extract_data(log):
     day = []
     name = []
     book = []
@@ -125,7 +136,8 @@ def extract_borrow_data(log):
         day.append(int(action[0]))
         name.append(action[1])
         book.append(action[2])
-        duration.append(int(action[3]))
+        if len(action) > 3:
+            duration.append(int(action[3]))
         
     return day, name, book, duration
 
@@ -167,9 +179,60 @@ def borrow_book(log_book, book):
             log_book[1][index] = quantity - 1
             break
 
-    return log_book    
+    return log_book  
 
-def calendar_live_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available):
+def return_book(log_book, book):
+    
+    for index in range(len(log_book[0])):
+        book_in_storage = log_book[0][index]
+        if (book_in_storage == book):
+            quantity = int(log_book[1][index])
+            log_book[1][index] = quantity + 1
+            break
+        
+    return log_book
+
+def calendar_borrow_availability(calendar, up_to_day):
+    
+    for day in range(up_to_day):
+        data = calendar.get(day)
+        book_availability = data[0]
+        borrow_log = data[1]
+        days, names, books, durations = extract_data(borrow_log)
+
+        if borrow_log != []:
+            for index in range(len(books)):
+                if authorization_check(book_availability, books[index], durations[index]):
+                    book_availability = borrow_book(book_availability, books[index])
+                    print(book_availability)
+                    calendar = update_storage(calendar, days[index], book_availability) 
+                    
+    return calendar 
+
+def calendar_return_availability(calendar, up_to_day):
+    for day in range(up_to_day):
+        data = calendar.get(day)
+        book_availability = data[0]
+        return_log = data[2]
+        days, names, books, durations = extract_data(return_log)
+
+        if return_log != []:
+            for index in range(len(books)):
+                book_availability = return_book(book_availability, books[index])
+                print(book_availability)
+                calendar = update_storage(calendar, days[index], book_availability) 
+                    
+    return calendar 
+
+def calendar_live_update(calendar, up_to_day):
+    
+    for day in range(up_to_day):
+        calendar = calendar_borrow_availability(calendar, day)
+        calendar = calendar_return_availability(calendar, day)
+        
+    return calendar
+
+def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available):
     """
     Create a calendar that will add all the information from logs that are passed in with the day_available length.
     - Format: {day : [ [storage] [borrow_log] [return_log] [addition_log] [fine_log] ]}
@@ -188,38 +251,18 @@ def calendar_live_generator(extracted_book_log, extracted_borrow_log, extracted_
     #Create a new calendar
     calendar = {day: [[] for element in range(5)] for day in range(day_available)}
     for day in range(day_available):
-        #calendar = update_storage(calendar, day, extracted_book_log)
-        data = calendar.get(day)
-        data[0] = extracted_book_log
-        calendar.update({day:data})
+        calendar = update_storage(calendar, day, extracted_book_log)
     calendar = add_info(calendar, extracted_borrow_log)
     calendar = add_info(calendar, extracted_return_log)
     calendar = add_info(calendar, extracted_addition_log)
     calendar = add_info(calendar, extracted_fine_log)
-    #Update storage each day
-    for day in range(day_available):
-        #Borrow
-        data = calendar.get(day)
-        book_availability = data[0]
-        borrow_log = data[1]
-        days, names, books, durations = extract_borrow_data(borrow_log)
-
-        if borrow_log != []:
-            for index in range(len(books)):
-                if authorization_check(book_availability, books[index], durations[index]):
-                    book_availability = borrow_book(book_availability, books[index])
-                    print(book_availability)
-                    calendar = update_storage(calendar, days[index], book_availability)
-        
-        #Return
-        #Add
 
     return calendar
     
 def main():
     #Read given information
-    log_library = read_file("PSU\CMPSC 131\Test\Final Project\librarylog.txt")
-    log_book = read_file("PSU\CMPSC 131\Test\Final Project\\booklist.txt")
+    log_library = read_file("Final Project\\librarylog.txt")
+    log_book = read_file("Final Project\\booklist.txt")
     #Extracting information in to appropriate storing places
     extracted_book_log = extract_log_parts(log_book)
     log_book, log_return, log_addition, log_fine, day_available = read_library_log(log_library)
@@ -228,7 +271,9 @@ def main():
     extracted_addition_log = extract_log_parts(log_addition)
     extracted_fine_log = extract_log_parts(log_fine)
     #Calendar
-    calendar = calendar_live_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available)
+    calendar = calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available)
+    for day in range(day_available):
+        calendar = calendar_live_update(calendar, day)
     #print
     for key,value in calendar.items():
         print(key, value)
