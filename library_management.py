@@ -256,9 +256,8 @@ def calendar_return_update(calendar, day):
     Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
     - calendar: a new calendar that holds all updated activity
     """
-    data_previous = calendar.get(day-1).copy()
     data_current = calendar.get(day).copy()
-    storage = data_previous[0].copy()
+    storage = data_current[0].copy()
     if data_current[2] != []:
         return_log = data_current[2].copy()
         extracted_return_data = extract_data(return_log)
@@ -287,7 +286,7 @@ def calendar_activity_update(calendar):
     days.pop(0)
     for day in days:
         calendar = calendar_borrow_update(calendar, day)
-        #calendar  = calendar_return_update(calendar, day)
+        calendar  = calendar_return_update(calendar, day)
     
     return calendar
 
