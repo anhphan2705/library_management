@@ -223,6 +223,53 @@ def calendar_borrow_update(calendar, day):
     
     return calendar
 
+#Return functions
+def book_return(storage, book):
+    """
+    This function is used to increase the quantity of book available in storage by 1.
+    
+    Param:
+    - storage: the available book list
+    - book: the name of the book
+
+    Return: [[books], [quantity], [restricted_type]]
+    - storage_new: a new storage that has the quantity of the book borrowed increase by 1
+    """
+    storage_new = storage.copy()
+    storage_new[1] = storage_new[1].copy()
+    for book_available_index in range(len(storage[0])):
+        book_available = storage_new[0][book_available_index]
+        if book_available == book:
+            storage_new[1][book_available_index] = int(storage_new[1][book_available_index]) + 1
+            break
+    return storage_new
+
+def calendar_return_update(calendar, day):
+    """
+    Main function that process all return activity through each day of the calendar 
+    by going through each return log of the day and call appropriate actions
+    
+    Param:
+    - calendar: the calendar that holds all activity
+    - day: the desired day that will be processed
+
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    - calendar: a new calendar that holds all updated activity
+    """
+    data_current = calendar.get(day).copy()
+    storage = data_current[0].copy()
+    if data_current[2] != []:
+        return_log = data_current[2].copy()
+        extracted_return_data = extract_data(return_log)
+        books = extracted_return_data[2]
+        for index in range(len(books)):
+                storage = book_return(storage, books[index])
+                calendar = update_storage(calendar, storage, day) 
+    else:
+        calendar = update_storage(calendar, storage, day)
+    
+    return calendar
+
 #Main calendar activity processor
 def calendar_activity_update(calendar):
     """
@@ -239,6 +286,7 @@ def calendar_activity_update(calendar):
     days.pop(0)
     for day in days:
         calendar = calendar_borrow_update(calendar, day)
+        calendar  = calendar_return_update(calendar, day)
     
     return calendar
 
