@@ -327,26 +327,6 @@ def calendar_add_update(calendar, day):
     return calendar
 
 #Main calendar activity processor
-def calendar_activity_update(calendar):
-    """
-    Update the calendar completely by going through each activity each day to 
-    process the book availability when borrowed, returned, added    
-    
-    Param:
-    - calendar: the calendar that holds all activity
-
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
-    - calendar: a new calendar that holds all updated activity
-    """
-    days = list(calendar.keys())
-    days.pop(0)
-    for day in days:
-        calendar = calendar_borrow_update(calendar, day)
-        calendar  = calendar_return_update(calendar, day)
-        calendar = calendar_add_update(calendar, day)
-    
-    return calendar
-
 def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available):
     """
     Create a calendar that will add all the information from logs that are passed in with the day_available length.
@@ -371,6 +351,26 @@ def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_retur
     for day in calendar.keys():
         calendar = update_storage(calendar, extracted_book_log, day)
 
+    return calendar
+
+def calendar_activity_update(calendar):
+    """
+    Update the calendar completely by going through each activity each day to 
+    process the book availability when borrowed, returned, added    
+    
+    Param:
+    - calendar: the calendar that holds all activity
+
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    - calendar: a new calendar that holds all updated activity
+    """
+    days = list(calendar.keys())
+    days.pop(0)
+    for day in days:
+        calendar = calendar_borrow_update(calendar, day)
+        calendar  = calendar_return_update(calendar, day)
+        calendar = calendar_add_update(calendar, day)
+    
     return calendar
 
 #Main part of the program
