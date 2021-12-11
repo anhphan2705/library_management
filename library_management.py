@@ -271,8 +271,8 @@ def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_retur
 #Main part of the program
 def main():
     #Read given information
-    log_library = read_file("Final Project\\librarylog.txt")
-    log_book = read_file("Final Project\\booklist.txt")
+    log_library = read_file("Final Project\library_management\librarylog.txt")
+    log_book = read_file("Final Project\library_management\\booklist.txt")
     #Extracting information in to appropriate storing places
     extracted_book_log = extract_log_parts(log_book)
     log_book, log_return, log_addition, log_fine, day_available = read_library_log(log_library)
