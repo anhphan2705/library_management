@@ -1,3 +1,4 @@
+#Extracting information group
 def read_file(directory):
     """
     Open file and read its content
@@ -69,8 +70,8 @@ def extract_log_parts(log):
     Param:
     - log: a log that contains information needed to be extract separated by #
     
-    Return:
-    - tuplle: contain all information as a list with nested list
+    Return: 
+    - tuple: contain all information as a list with nested list
     """
     recs = []
     for line in log:
@@ -78,6 +79,20 @@ def extract_log_parts(log):
     
     return list(map(list, zip(*recs)))
 
+def extract_data(log):
+    """
+    Extract data from log and put each type in the same list
+    - Format: [[day], [name], [book], [duration]]
+    
+    Param:
+    - log: the activity that it being logged
+
+    Return: 
+    - list: a list of activity that is sorted to the format above
+    """
+    return list(map(list, zip(*log)))
+
+# General calendar function
 def add_info(calendar, info):
     """
     Add information into the calendar in the appropriate day
@@ -108,34 +123,32 @@ def add_info(calendar, info):
         
     return calendar
 
-def update_storage(calendar, day, log_book):
+def update_storage(calendar, book_available, day):
+    """
+    Update book availability as a storage format into the calendar for a desired day
     
-    data = calendar.get(day)
-    data[0] = log_book
-    calendar.update({day:data})
-    
-    return calendar
-        
-def extract_borrow_data(log):
-    day = []
-    name = []
-    book = []
-    duration = []
-    for action in log:
-        day.append(int(action[0]))
-        name.append(action[1])
-        book.append(action[2])
-        duration.append(int(action[3]))
-        
-    return day, name, book, duration
+    Param:
+    - calendar: the calendar that holds all activity
+    - book_available: the storage list that contains all the available books' info
 
-def authorization_check(log_book, book, duration):
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    - calendar: a new calendar that holds all updated activity
+    """
+    data = calendar.get(day).copy()
+    data[0] = book_available.copy()
+    data[0][1] = data[0][1].copy()
+    calendar.update({day:data})
+
+    return calendar
+
+#Borrow functions
+def authorization_check(book_storage, book, duration):
     """
     Check if this borrow transaction is allowed.
     It checks for the duration of borrow regarding the restrict guideline and the quantity of available book
     
     Param:
-    - log_book: the available book list
+    - book_storage: the available book list
     - book: the name of the book
     - day: the day of borrow
     - duration: days borrowed for
@@ -144,35 +157,95 @@ def authorization_check(log_book, book, duration):
     - authorization: True/False that the transaction is allowed
     """  
     authorization = True
-    for index in range(len(log_book[0])):
-        if (log_book[0][index] == book):
-            if log_book[1][index] == 0:
+    for index in range(len(book_storage[0])):
+        if (book_storage[0][index] == book):
+            if book_storage[1][index] == 0:
                 authorization = False
-            if log_book[2][index] == "TRUE":
+            if book_storage[2][index] == "TRUE":
                 if duration > 7:
                     authorization = False
-            if log_book[2][index] == "FALSE":
+            if book_storage[2][index] == "FALSE":
                 if duration > 28:
                     authorization = False
             break
     
     return authorization
 
-def borrow_book(log_book, book):
+def book_borrow(storage, book, duration):
+    """
+    This function ONLY work when the borrow request PASS the authorization_check. If it does, the transaction is allowed and decrease that book available quantity by 1.
+    
+    Param:
+    - storage: the available book list
+    - book: the name of the book
+    - duration the duration of borrowing
 
-    for index in range(len(log_book[0])):
-        book_in_storage = log_book[0][index]
-        if (book_in_storage == book):
-            quantity = int(log_book[1][index])
-            log_book[1][index] = quantity - 1
-            break
+    Return: [[books], [quantity], [restricted_type]]
+    - storage_new: a new storage that has the quantity of the book borrowed decreased by 1
+    """
+    if authorization_check(storage, book, int(duration)):
+        storage_new = storage.copy()
+        storage_new[1] = storage_new[1].copy()
+        for book_available_index in range(len(storage[0])):
+            book_available = storage_new[0][book_available_index]
+            if book_available == book:
+                storage_new[1][book_available_index] = int(storage_new[1][book_available_index]) - 1
+                break
+        return storage_new
+    else:
+        return storage
+  
+def calendar_borrow_update(calendar, day):
+    """
+    Main function that process all borrow activity through each day of the calendar 
+    by going through each borrow log of the day and call appropriate actions
+    
+    Param:
+    - calendar: the calendar that holds all activity
+    - day: the desired day that will be processed
 
-    return log_book    
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    - calendar: a new calendar that holds all updated activity
+    """
+    data_previous = calendar.get(day-1).copy()
+    data_current = calendar.get(day).copy()
+    storage = data_previous[0].copy()
+    if data_current[1] != []:
+        borrow_log = data_current[1].copy()
+        extracted_borrow_data = extract_data(borrow_log)
+        books = extracted_borrow_data[2]
+        durations = extracted_borrow_data[3]
+        for index in range(len(books)):
+                storage = book_borrow(storage, books[index], int(durations[index]))
+                calendar = update_storage(calendar, storage, day) 
+    else:
+        calendar = update_storage(calendar, storage, day)
+    
+    return calendar
 
-def calendar_live_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available):
+#Main calendar activity processor
+def calendar_activity_update(calendar):
+    """
+    Update the calendar completely by going through each activity each day to 
+    process the book availability when borrowed, returned, added    
+    
+    Param:
+    - calendar: the calendar that holds all activity
+
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    - calendar: a new calendar that holds all updated activity
+    """
+    days = list(calendar.keys())
+    days.pop(0)
+    for day in days:
+        calendar = calendar_borrow_update(calendar, day)
+    
+    return calendar
+
+def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available):
     """
     Create a calendar that will add all the information from logs that are passed in with the day_available length.
-    - Format: {day : [ [storage] [borrow_log] [return_log] [addition_log] [fine_log] ]}
+    - Format: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
     
     Param:
     - extracted_book_log = a list of book, quantity and restricted status of the book
@@ -185,41 +258,21 @@ def calendar_live_generator(extracted_book_log, extracted_borrow_log, extracted_
     Return:
     - calendar: a calendar with information
     """
-    #Create a new calendar
     calendar = {day: [[] for element in range(5)] for day in range(day_available)}
-    for day in range(day_available):
-        #calendar = update_storage(calendar, day, extracted_book_log)
-        data = calendar.get(day)
-        data[0] = extracted_book_log
-        calendar.update({day:data})
     calendar = add_info(calendar, extracted_borrow_log)
     calendar = add_info(calendar, extracted_return_log)
     calendar = add_info(calendar, extracted_addition_log)
     calendar = add_info(calendar, extracted_fine_log)
-    #Update storage each day
-    for day in range(day_available):
-        #Borrow
-        data = calendar.get(day)
-        book_availability = data[0]
-        borrow_log = data[1]
-        days, names, books, durations = extract_borrow_data(borrow_log)
-
-        if borrow_log != []:
-            for index in range(len(books)):
-                if authorization_check(book_availability, books[index], durations[index]):
-                    book_availability = borrow_book(book_availability, books[index])
-                    print(book_availability)
-                    calendar = update_storage(calendar, days[index], book_availability)
-        
-        #Return
-        #Add
+    for day in calendar.keys():
+        calendar = update_storage(calendar, extracted_book_log, day)
 
     return calendar
-    
+
+#Main part of the program
 def main():
     #Read given information
-    log_library = read_file("PSU\CMPSC 131\Test\Final Project\librarylog.txt")
-    log_book = read_file("PSU\CMPSC 131\Test\Final Project\\booklist.txt")
+    log_library = read_file("Final Project\\librarylog.txt")
+    log_book = read_file("Final Project\\booklist.txt")
     #Extracting information in to appropriate storing places
     extracted_book_log = extract_log_parts(log_book)
     log_book, log_return, log_addition, log_fine, day_available = read_library_log(log_library)
@@ -228,7 +281,8 @@ def main():
     extracted_addition_log = extract_log_parts(log_addition)
     extracted_fine_log = extract_log_parts(log_fine)
     #Calendar
-    calendar = calendar_live_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available)
+    calendar = calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available)
+    calendar = calendar_activity_update(calendar)
     #print
     for key,value in calendar.items():
         print(key, value)
