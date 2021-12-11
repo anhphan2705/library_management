@@ -270,6 +270,62 @@ def calendar_return_update(calendar, day):
     
     return calendar
 
+#Add book functions
+def book_add(storage, book):
+    """
+    This function is used to add new book or increase the book available quantity by 1
+    
+    Param:
+    - storage: the available book list
+    - book: the name of the book
+
+    Return: [[books], [quantity], [restricted_type]]
+    - storage_new: a new storage that has the quantity of the new book or existing book increase by 1
+    """
+    storage_new = storage.copy()
+    storage_new[0] = storage_new[0].copy()
+    storage_new[1] = storage_new[1].copy()
+    storage_new[2] = storage_new[2].copy()
+    is_exist_book = False
+    for book_available_index in range(len(storage[0])):
+        book_available = storage_new[0][book_available_index]
+        if book_available == book:
+            storage_new[1][book_available_index] = int(storage_new[1][book_available_index]) + 1
+            is_exist_book = True
+            break
+    if not is_exist_book:
+        storage_new[0].append(book) 
+        storage_new[1].append("1")   
+        storage_new[2].append("FALSE")     
+     
+    return storage_new
+    
+def calendar_add_update(calendar, day):
+    """
+    Main function that process all adding activity through each day of the calendar 
+    by going through each adding log of the day and call appropriate actions
+    
+    Param:
+    - calendar: the calendar that holds all activity
+    - day: the desired day that will be processed
+
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    - calendar: a new calendar that holds all updated activity
+    """
+    data_current = calendar.get(day).copy()
+    storage = data_current[0].copy()
+    if data_current[3] != []:
+        return_log = data_current[3].copy()
+        extracted_add_data = extract_data(return_log)
+        books = extracted_add_data[1]
+        for index in range(len(books)):
+                storage = book_add(storage, books[index])
+                calendar = update_storage(calendar, storage, day) 
+    else:
+        calendar = update_storage(calendar, storage, day)
+    
+    return calendar
+
 #Main calendar activity processor
 def calendar_activity_update(calendar):
     """
@@ -287,6 +343,7 @@ def calendar_activity_update(calendar):
     for day in days:
         calendar = calendar_borrow_update(calendar, day)
         calendar  = calendar_return_update(calendar, day)
+        calendar = calendar_add_update(calendar, day)
     
     return calendar
 
