@@ -110,16 +110,17 @@ def add_info(calendar, info):
                    "A":3,
                    "P":4}
     
-    type_id = info[0][0]
-    info.pop(0)
-    data_location = type_id_dict.get(type_id)
-    log_action = list(map(list, zip(*info)))
-    
-    for index in range(len(log_action)):
-        day = int(log_action[index][0])
-        data = calendar.get(day)
-        data[data_location].append(log_action[index])
-        calendar.update({day:data})
+    if info != []:
+        type_id = info[0][0]
+        info.pop(0)
+        data_location = type_id_dict.get(type_id)
+        log_action = list(map(list, zip(*info)))
+        
+        for index in range(len(log_action)):
+            day = int(log_action[index][0])
+            data = calendar.get(day)
+            data[data_location].append(log_action[index])
+            calendar.update({day:data})
         
     return calendar
 
@@ -326,6 +327,9 @@ def calendar_add_update(calendar, day):
     
     return calendar
 
+#Fine system functions
+
+
 #Main calendar activity processor
 def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available):
     """
@@ -340,10 +344,10 @@ def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_retur
     - extracted_fine_log = a list of comand lines regarding information of people being fined
     - day_available = an int that represent the amount of days the log is available
     
-    Return:
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
     - calendar: a calendar with information
     """
-    calendar = {day: [[] for element in range(5)] for day in range(day_available)}
+    calendar = {day: [[] for element in range(7)] for day in range(day_available)}
     calendar = add_info(calendar, extracted_borrow_log)
     calendar = add_info(calendar, extracted_return_log)
     calendar = add_info(calendar, extracted_addition_log)
@@ -376,8 +380,8 @@ def calendar_activity_update(calendar):
 #Main part of the program
 def main():
     #Read given information
-    log_library = read_file("Final Project\library_management\librarylog.txt")
-    log_book = read_file("Final Project\library_management\\booklist.txt")
+    log_library = read_file("Final Project\library_management\librarylog-2.txt")
+    log_book = read_file("Final Project\library_management\\booklist-1.txt")
     #Extracting information in to appropriate storing places
     extracted_book_log = extract_log_parts(log_book)
     log_book, log_return, log_addition, log_fine, day_available = read_library_log(log_library)
