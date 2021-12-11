@@ -134,11 +134,17 @@ def update_storage(calendar, book_available, day):
     Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
     - calendar: a new calendar that holds all updated activity
     """
-    data = calendar.get(day).copy()
-    data[0] = book_available.copy()
-    data[0][1] = data[0][1].copy()
-    calendar.update({day:data})
+    try:
+        data = calendar.get(day).copy()
+    except AttributeError:
+        pass
+    else:
+        data[0] = book_available.copy()
+        data[0][1] = data[0][1].copy()
+        calendar.update({day:data})
 
+        return calendar
+    
     return calendar
 
 #Borrow functions
@@ -207,19 +213,29 @@ def calendar_borrow_update(calendar, day):
     Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
     - calendar: a new calendar that holds all updated activity
     """
-    data_previous = calendar.get(day-1).copy()
-    data_current = calendar.get(day).copy()
-    storage = data_previous[0].copy()
-    if data_current[1] != []:
-        borrow_log = data_current[1].copy()
-        extracted_borrow_data = extract_data(borrow_log)
-        books = extracted_borrow_data[2]
-        durations = extracted_borrow_data[3]
-        for index in range(len(books)):
-                storage = book_borrow(storage, books[index], int(durations[index]))
-                calendar = update_storage(calendar, storage, day) 
-    else:
-        calendar = update_storage(calendar, storage, day)
+    if day != 0:
+        
+        data_previous = calendar.get(day-1).copy()
+        storage_previous = data_previous[0].copy()
+        data_current = calendar.get(day).copy()
+        storage = data_current[0].copy()
+        storage_previous = data_previous[0].copy()
+        
+        if data_current[1] != []:
+            
+            borrow_log = data_current[1].copy()
+            extracted_borrow_data = extract_data(borrow_log)
+            books = extracted_borrow_data[2]
+            durations = extracted_borrow_data[3]
+            
+            for index in range(len(books)):
+                    storage_new = book_borrow(storage, books[index], int(durations[index]))
+                    calendar = update_storage(calendar, storage_new, day) 
+                    calendar = update_storage(calendar, storage_new, day+1) 
+                    
+        else:
+            calendar = update_storage(calendar, storage_previous, day)
+            calendar = update_storage(calendar, storage_previous, day+1)
     
     return calendar
 
@@ -236,7 +252,6 @@ def calendar_activity_update(calendar):
     - calendar: a new calendar that holds all updated activity
     """
     days = list(calendar.keys())
-    days.pop(0)
     for day in days:
         calendar = calendar_borrow_update(calendar, day)
     
