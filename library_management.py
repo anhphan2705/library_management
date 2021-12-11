@@ -272,11 +272,8 @@ def calendar_return_update(calendar, day):
     """
     if day != 0:
         
-        data_previous = calendar.get(day-1).copy()
-        storage_previous = data_previous[0].copy()
         data_current = calendar.get(day).copy()
         storage = data_current[0].copy()
-        storage_previous = data_previous[0].copy()
         
         if data_current[2] != []:
             
