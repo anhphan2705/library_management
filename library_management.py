@@ -87,7 +87,7 @@ def extract_data(log):
     Param:
     - log: the activity that it being logged
 
-    Return: 
+    Return: [[day], [name], [book], [duration]]
     - list: a list of activity that is sorted to the format above
     """
     return list(map(list, zip(*log)))
@@ -132,7 +132,7 @@ def update_storage(calendar, book_available, day):
     - calendar: the calendar that holds all activity
     - book_available: the storage list that contains all the available books' info
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
     - calendar: a new calendar that holds all updated activity
     """
     data = calendar.get(day).copy()
@@ -140,6 +140,17 @@ def update_storage(calendar, book_available, day):
     data[0][1] = data[0][1].copy()
     calendar.update({day:data})
 
+    return calendar
+
+def add_book_tracking_format(calendar):
+    
+    format = [[] for element in range(3)]
+    for day in list(calendar.keys()):
+        data = calendar.get(day).copy()
+        data[5] = data[5].copy()
+        data[5] = format.copy()
+        calendar.update({day:data})
+        
     return calendar
 
 #Borrow functions
@@ -205,7 +216,7 @@ def calendar_borrow_update(calendar, day):
     - calendar: the calendar that holds all activity
     - day: the desired day that will be processed
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
     - calendar: a new calendar that holds all updated activity
     """
     data_previous = calendar.get(day-1).copy()
@@ -254,7 +265,7 @@ def calendar_return_update(calendar, day):
     - calendar: the calendar that holds all activity
     - day: the desired day that will be processed
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
     - calendar: a new calendar that holds all updated activity
     """
     data_current = calendar.get(day).copy()
@@ -310,14 +321,14 @@ def calendar_add_update(calendar, day):
     - calendar: the calendar that holds all activity
     - day: the desired day that will be processed
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
     - calendar: a new calendar that holds all updated activity
     """
     data_current = calendar.get(day).copy()
     storage = data_current[0].copy()
     if data_current[3] != []:
-        return_log = data_current[3].copy()
-        extracted_add_data = extract_data(return_log)
+        add_log = data_current[3].copy()
+        extracted_add_data = extract_data(add_log)
         books = extracted_add_data[1]
         for index in range(len(books)):
                 storage = book_add(storage, books[index])
@@ -327,14 +338,56 @@ def calendar_add_update(calendar, day):
     
     return calendar
 
-#Fine system functions
+#Late tracker        
+def late_return_tracker(day, extracted_borrow_log, extracted_return_log):
+    """
+    Track all borrow and return transaction to determine late returner. Any violation will be added to a list.
+    
+    Param:
+    - day: the desired day that will be processed
+    - extracted_borrow_log: Format type "B": [[B] [day] [name] [book] [days borrowed for]]
+    - extracted_return_log: Format type "R": [[R] [day] [name] [book]]
 
+    Return: [ [student], [book], [late_day] ]
+    - late_tracker: a list that contains all the late return students's info
+    """
+    late_tracking_log = [[] for elements in range(3)]
+    for borrow_index in range(len(extracted_borrow_log[0])):
+        day_borrow = int(extracted_borrow_log[0][borrow_index])
+        name_borrow = extracted_borrow_log[1][borrow_index]
+        books_borrow = extracted_borrow_log[2][borrow_index]
+        duration_borrow_requested = int(extracted_borrow_log[3][borrow_index])
+        
+        if day_borrow < day:
+            for return_index in range(len(extracted_return_log[0])):
+                day_return = int(extracted_return_log[0][return_index])
+                name_return = extracted_return_log[1][return_index]
+                books_return = extracted_return_log[2][return_index]
+                if day_return <= day:
+                    if (name_borrow == name_return) and (books_borrow == books_return):
+                        day_return_expected = day_borrow + duration_borrow_requested
+                        if day_return_expected < day_return:
+                            late_days = day_return - day_return_expected
+                            late_tracking_log[0].append(name_borrow)
+                            late_tracking_log[1].append(books_borrow)
+                            late_tracking_log[2].append(late_days)
+    
+    return late_tracking_log
 
+def late_return_update(calendar, day, late_tracking_log):
+    
+    data_current = calendar.get(day).copy()
+    data_current[5] = data_current[5].copy()
+    data_current[5] = late_tracking_log
+    calendar.update({day:data_current})
+    
+    return calendar
+                
 #Main calendar activity processor
 def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available):
     """
     Create a calendar that will add all the information from logs that are passed in with the day_available length.
-    - Format: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    - Format: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
     
     Param:
     - extracted_book_log = a list of book, quantity and restricted status of the book
@@ -344,7 +397,7 @@ def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_retur
     - extracted_fine_log = a list of comand lines regarding information of people being fined
     - day_available = an int that represent the amount of days the log is available
     
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
     - calendar: a calendar with information
     """
     calendar = {day: [[] for element in range(7)] for day in range(day_available)}
@@ -352,12 +405,13 @@ def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_retur
     calendar = add_info(calendar, extracted_return_log)
     calendar = add_info(calendar, extracted_addition_log)
     calendar = add_info(calendar, extracted_fine_log)
+    calendar = add_book_tracking_format(calendar)
     for day in calendar.keys():
         calendar = update_storage(calendar, extracted_book_log, day)
 
     return calendar
 
-def calendar_activity_update(calendar):
+def calendar_activity_update(calendar, extracted_borrow_log, extracted_return_log):
     """
     Update the calendar completely by going through each activity each day to 
     process the book availability when borrowed, returned, added    
@@ -365,7 +419,7 @@ def calendar_activity_update(calendar):
     Param:
     - calendar: the calendar that holds all activity
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
     - calendar: a new calendar that holds all updated activity
     """
     days = list(calendar.keys())
@@ -374,14 +428,16 @@ def calendar_activity_update(calendar):
         calendar = calendar_borrow_update(calendar, day)
         calendar  = calendar_return_update(calendar, day)
         calendar = calendar_add_update(calendar, day)
+        late_tracking_log = late_return_tracker(day, extracted_borrow_log, extracted_return_log)
+        calendar = late_return_update(calendar, day, late_tracking_log)
     
     return calendar
 
 #Main part of the program
 def main():
     #Read given information
-    log_library = read_file("Final Project\library_management\librarylog-2.txt")
-    log_book = read_file("Final Project\library_management\\booklist-1.txt")
+    log_library = read_file("Final Project\library_management\librarylog.txt")
+    log_book = read_file("Final Project\library_management\\booklist.txt")
     #Extracting information in to appropriate storing places
     extracted_book_log = extract_log_parts(log_book)
     log_book, log_return, log_addition, log_fine, day_available = read_library_log(log_library)
@@ -391,7 +447,7 @@ def main():
     extracted_fine_log = extract_log_parts(log_fine)
     #Calendar
     calendar = calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available)
-    calendar = calendar_activity_update(calendar)
+    calendar = calendar_activity_update(calendar, extracted_borrow_log, extracted_return_log)
     #print
     for key,value in calendar.items():
         print(key, value)
