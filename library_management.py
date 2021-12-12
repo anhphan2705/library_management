@@ -1,4 +1,7 @@
 #Extracting information group
+from os import name
+
+
 def read_file(directory):
     """
     Open file and read its content
@@ -141,6 +144,38 @@ def update_storage(calendar, book_available, day):
     calendar.update({day:data})
 
     return calendar
+
+def get_storage(calendar, day):
+    """
+    Get storage information
+    
+    Param:
+    - calendar: the calendar that holds all activity
+    - day: the day in the calendar
+
+    Return: [[books], [quantity], [restricted_type]]
+    - storage: book availability
+    """
+    data = calendar.get(day).copy()
+    storage = data[0].copy()
+    
+    return storage
+
+def get_log_fine(calendar, day):
+    """
+    Get log fine information
+    
+    Param:
+    - calendar: the calendar that holds all activity
+    - day: the day in the calendar
+
+    Return: [[[day], [student}, [amount_fine_paying]]]
+    - log_fine: the log that keep track of how much student owe 
+    """
+    data = calendar.get(day).copy()
+    storage = data[4].copy()
+    
+    return storage
 
 def add_book_tracking_format(calendar):
     
@@ -348,8 +383,8 @@ def late_return_tracker(day, extracted_borrow_log, extracted_return_log):
     - extracted_borrow_log: Format type "B": [[B] [day] [name] [book] [days borrowed for]]
     - extracted_return_log: Format type "R": [[R] [day] [name] [book]]
 
-    Return: [ [student], [book], [late_day] ]
-    - late_tracker: a list that contains all the late return students's info
+    Return: [ [student], [book], [late_day_need_to_pay] ]
+    - late_tracking_log: a list that contains all the late return students's info
     """
     late_tracking_log = [[] for elements in range(3)]
     for borrow_index in range(len(extracted_borrow_log[0])):
@@ -371,18 +406,147 @@ def late_return_tracker(day, extracted_borrow_log, extracted_return_log):
                             late_tracking_log[0].append(name_borrow)
                             late_tracking_log[1].append(books_borrow)
                             late_tracking_log[2].append(late_days)
+                        break
     
     return late_tracking_log
 
 def late_return_update(calendar, day, late_tracking_log):
+    """
+    Main function that process all late return through each day of the calendar 
+    by going through each borrow and return log of up until the day of and call appropriate actions
     
+    Param:
+    - calendar: the calendar that holds all activity
+    - day: the desired day that will be processed
+    - late_tracking_log: the log that contains late returner's info
+
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    - calendar: a new calendar that holds all updated activity
+    """
     data_current = calendar.get(day).copy()
     data_current[5] = data_current[5].copy()
     data_current[5] = late_tracking_log
     calendar.update({day:data_current})
     
     return calendar
-                
+
+#Fine functions
+def book_fine(storage, late_tracking_log):
+    """
+    Track all fine for late returner. Any violation will be added to a dictionary.
+    
+    Param:
+    - storage: the list of book available. Format: [[books], [quantity], [restricted_type]]
+    - late_tracking_log: late return students's info. Format: [ [student], [book], [late_day_need_to_pay] ]
+
+    Return: {student: fine_amount}
+    - fine_tracker: a dictionary contains student names and the fine they have to pay
+    """
+    fine_tracker = {}
+    
+    for index in range(len(late_tracking_log[0])):
+        late_student = late_tracking_log[0][index]
+        late_book = late_tracking_log[1][index]
+        late_day = late_tracking_log[2][index]
+        fee_per_day = 2
+        for book_index in range(len(storage[0])):
+            book = storage[0][book_index]
+            restricted_type = storage[2][book_index]
+            if late_book == book:
+                if restricted_type == "TRUE":
+                    fee_per_day = 5
+                break
+        fine_total = late_day * fee_per_day
+        fine_tracker.update({late_student: fine_total})
+        
+    return fine_tracker
+
+def fine_payment(log_fine, fine_tracker, day):
+    """
+    This function is used to detect payment in activity log. It will record the student and the payment and subtract it from the owe money. If the money goes to 0 it will delete it from the fine_tracker    
+    
+    Param:
+    - log_fine: the list of payment. Format: [[[day], [student}, [amount_fine_paying]]]
+    - fine_tracker: a dictionary contains student names and the fine they have to pay. Format: {student: fine_amount}
+    - day: the day that it is being executed
+
+    Return: {student: fine_amount}
+    - fine_tracker: a dictionary contains student names and the fine left they have to pay
+    """
+    if log_fine != []:
+        for transaction in log_fine:
+            name_log = transaction[1]
+            money_paid_log = int(transaction[2])
+            money_owe = int(fine_tracker.get(name_log))
+            money_left = money_owe - money_paid_log
+            if money_left > 0:
+                fine_tracker.update({name_log: money_left})
+            else:
+                fine_tracker.pop(name_log)
+        
+    return fine_tracker
+
+def money_paid(late_tracking_log, fine_tracker, day):
+    """
+    This function detects the amount of money student pay.
+    
+    Param:
+    - late_tracking_log: a list that contains all the late return students's info. Format: [ [student], [book], [late_day_need_to_pay] ]
+    - fine_tracker: a dictionary contains student names and the fine they have to pay. Format: {student: fine_amount}
+    - day: the day that need to be processed
+
+    Return: {student: fine_amount}
+    - late_tracking_log: a list that contains all the late return students's info. Format: [ [student], [book], [late_day_need_to_pay] ]
+    """
+    for index in range(len(late_tracking_log[0])):
+        name = late_tracking_log[0][index]
+        if name not in list(fine_tracker.keys()):
+            late_tracking_log[0].pop(index)
+            late_tracking_log[1].pop(index)
+            late_tracking_log[2].pop(index)
+            
+    return late_tracking_log
+
+def fine_processor(storage, late_tracking_log, log_fine, day):
+    """
+    This function is process fines and late return. It calls appropriate action for each transaction.
+    
+    Param:
+    - late_tracking_log: a list that contains all the late return students's info. Format: [ [student], [book], [late_day_need_to_pay] ]
+    - log_fine: the list of payment. Format: [[[day], [student}, [amount_fine_paying]]]
+    - fine_tracker: a dictionary contains student names and the fine they have to pay. Format: {student: fine_amount}
+    - day: the day that need to be processed
+
+    Return: {student: fine_amount}
+    - fine_tracker: a dictionary contains student names and the fine left they have to pay
+    - late_tracking_log: a list that contains all the late return students's info. Format: [ [student], [book], [late_day_need_to_pay] ]
+    """
+    fine_tracker = book_fine(storage, late_tracking_log)
+    fine_tracker = fine_payment(log_fine, fine_tracker, day)
+    late_tracking_log = money_paid(late_tracking_log, fine_tracker, day)
+    
+    return fine_tracker, late_tracking_log
+
+def fine_update(calendar, day, fine_tracker):
+    """
+    Keep track of how much money people owe the library
+    by going through each payment and late day log up until the day of and call appropriate actions
+    
+    Param:
+    - calendar: the calendar that holds all activity
+    - day: the desired day that will be processed
+    - fine_tracker: a dictionary contains student names and the fine left they have to pay
+
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    - calendar: a new calendar that holds all updated activity
+    """
+    data_current = calendar.get(day).copy()
+    data_current[6] = data_current[6].copy()
+    data_current[6] = fine_tracker
+    calendar.update({day:data_current})
+    
+    return calendar
+    
 #Main calendar activity processor
 def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available):
     """
@@ -429,8 +593,13 @@ def calendar_activity_update(calendar, extracted_borrow_log, extracted_return_lo
         calendar  = calendar_return_update(calendar, day)
         calendar = calendar_add_update(calendar, day)
         late_tracking_log = late_return_tracker(day, extracted_borrow_log, extracted_return_log)
+        #recheck late_tracking_log
         calendar = late_return_update(calendar, day, late_tracking_log)
-    
+        storage = get_storage(calendar, day)
+        log_fine = get_log_fine(calendar, day)
+        fine_tracker, late_tracking_log = fine_processor(storage, late_tracking_log, log_fine, day)
+        calendar = fine_update(calendar, day, fine_tracker)
+        
     return calendar
 
 #Main part of the program
