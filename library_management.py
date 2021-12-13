@@ -229,7 +229,7 @@ def book_tracker(is_borrow, student, book_name):
     else:
         student_borrowing_book.update({student: [book_name]})
 
-def book_usage_initializer(day_available):
+def book_usage_initializer(day_available, add_log):
     """
     Initialize book and its usage in a global dictionary to keep track. Format: {book: [borrow_days, total_possible_borrow, usage_ratio]}
     
@@ -239,6 +239,7 @@ def book_usage_initializer(day_available):
     
     Param:
     - day_available: an int that represent the amount of days the log is available
+    - add_log: the original log when library adding more book. Format: [[day] [book]]
     """
     global book_usage
     
@@ -246,10 +247,27 @@ def book_usage_initializer(day_available):
         book = maximum_storage[0][index]
         quantity = maximum_storage[1][index]
         borrow_day = 0
-        total_possible_borrow = day_available*quantity
-        usage_ratio = borrow_day/total_possible_borrow
+        total_possible_borrow = (day_available-1)*quantity
+        usage_ratio = borrow_day/total_possible_borrow*100
         book_usage.update({book:[borrow_day, total_possible_borrow, usage_ratio]})
-
+    if add_log != []:
+        for index in range(len(add_log[0])):
+            book = add_log[1][index]
+            if book in list(book_usage.keys()):
+                day_borrow = int(add_log[0][index])
+                info = book_usage.get(book)
+                borrow_day = info[0]
+                total_possible_borrow = info[1]
+                total_possible_borrow = total_possible_borrow + (day_available - day_borrow)
+                usage_ratio = borrow_day/total_possible_borrow*100
+                book_usage.update({book:[borrow_day, total_possible_borrow, usage_ratio]})
+            else:
+                day_borrow = int(add_log[0][index])
+                borrow_day = 0
+                total_possible_borrow = day_available-day_borrow
+                usage_ratio = borrow_day/total_possible_borrow*100
+                book_usage.update({book:[borrow_day, total_possible_borrow, usage_ratio]})
+                
 def book_usage_tracker(extracted_borrow_log, extracted_return_log):
     """
     Update books borrow day in a global dictionary to keep track. Format: {book: [borrow_days, total_possible_borrow, usage_ratio]}
@@ -275,15 +293,23 @@ def book_usage_tracker(extracted_borrow_log, extracted_return_log):
             books_return = extracted_return_log[2][return_index]
             
             if day_borrow < day_return:
-                if (name_borrow == name_return) and (books_borrow == books_return) and (name_borrow not in reject_borrow_transaction[1]) and (day_borrow not in reject_borrow_transaction[0]) and (books_borrow not in reject_borrow_transaction[2]):
-                    borrow_day = day_return - day_borrow
-                    book_stats = book_usage.get(books_borrow)
-                    borrow_day_new = book_stats[0] + borrow_day
-                    total_possible_borrow = book_stats[1]
-                    usage_ratio = borrow_day/total_possible_borrow
-                    
-                    book_usage.update({books_borrow:[borrow_day_new, total_possible_borrow, usage_ratio]})
-                    break
+                if (name_borrow == name_return) and (books_borrow == books_return):
+                    is_break = False
+                    for index in range(len(reject_borrow_transaction[0])):
+                        if (name_borrow == reject_borrow_transaction[1][index]) and (day_borrow == reject_borrow_transaction[0][index]) and (books_borrow == reject_borrow_transaction[2][index]):
+                            is_break= True
+                            break
+                    if is_break:
+                        break
+                    else:
+                        borrow_day = day_return - day_borrow
+                        book_stats = book_usage.get(books_borrow)
+                        borrow_day_new = book_stats[0] + borrow_day
+                        total_possible_borrow = book_stats[1]
+                        usage_ratio = borrow_day/total_possible_borrow*100
+                        
+                        book_usage.update({books_borrow:[borrow_day_new, total_possible_borrow, usage_ratio]})
+                        break
 
 def rejected_transaction(day, student, book):
     """
@@ -722,8 +748,8 @@ def maximum_storage_tracker(storage, add_log):
     global maximum_storage
     
     books = add_log[1]
-    for book in books:
-        storage = book_add(storage, book)
+    # for book in books:
+    #     storage = book_add(storage, book)
     for index in range(len(storage[1])):
         storage[1][index] = int(storage[1][index])
     
@@ -843,8 +869,8 @@ def output_calendar(calendar):
 #Main part of the program
 def main():
     #Read given information
-    log_library = read_file("Final Project\library_management\librarylog.txt")
-    log_book = read_file("Final Project\library_management\\booklist.txt")
+    log_library = read_file("Final Project\library_management\librarylog-2.txt")
+    log_book = read_file("Final Project\library_management\\booklist-1.txt")
     #Extracting information in to appropriate storing places
     extracted_book_log = extract_log_parts(log_book)
     log_book, log_return, log_addition, log_fine, day_available = read_library_log(log_library)
@@ -854,9 +880,9 @@ def main():
     extracted_fine_log = extract_log_parts(log_fine)
     #Calendar
     calendar = calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available)
-    book_usage_initializer(day_available) #Track book usage
-    book_usage_tracker(extracted_borrow_log, extracted_return_log) #Track book usage
+    book_usage_initializer(day_available, extracted_addition_log) #Track book usage
     calendar = calendar_activity_update(calendar, day_available, extracted_borrow_log, extracted_return_log)
+    book_usage_tracker(extracted_borrow_log, extracted_return_log) #Track book usage
     #print 
     output_calendar(calendar)       
     book_usage_manager(is_ratio_sort=True)
