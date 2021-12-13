@@ -268,7 +268,7 @@ def book_usage_initializer(day_available, add_log):
                 usage_ratio = borrow_day/total_possible_borrow*100
                 book_usage.update({book:[borrow_day, total_possible_borrow, usage_ratio]})
                 
-def book_usage_tracker(extracted_borrow_log, extracted_return_log):
+def book_usage_tracker(extracted_borrow_log, extracted_return_log, day_available):
     """
     Update books borrow day in a global dictionary to keep track. Format: {book: [borrow_days, total_possible_borrow, usage_ratio]}
     
@@ -279,13 +279,15 @@ def book_usage_tracker(extracted_borrow_log, extracted_return_log):
     Param:
     - extracted_borrow_log: Format type "B": [[B] [day] [name] [book] [days borrowed for]]
     - extracted_return_log: Format type "R": [[R] [day] [name] [book]]
+    - day_available: an int that represent the amount of days the log is available
     """
     global book_usage
-    
+    #Book has been returned
     for borrow_index in range(len(extracted_borrow_log[0])):
         day_borrow = int(extracted_borrow_log[0][borrow_index])
         name_borrow = extracted_borrow_log[1][borrow_index]
         books_borrow = extracted_borrow_log[2][borrow_index]
+        is_restart = False
         
         for return_index in range(len(extracted_return_log[0])):
             day_return = int(extracted_return_log[0][return_index])
@@ -309,8 +311,32 @@ def book_usage_tracker(extracted_borrow_log, extracted_return_log):
                         usage_ratio = borrow_day/total_possible_borrow*100
                         
                         book_usage.update({books_borrow:[borrow_day_new, total_possible_borrow, usage_ratio]})
+                        extracted_borrow_log[0].pop(borrow_index)
+                        extracted_borrow_log[1].pop(borrow_index)
+                        extracted_borrow_log[2].pop(borrow_index)
+                        extracted_borrow_log[3].pop(borrow_index)
+                        extracted_return_log[0].pop(return_index)
+                        extracted_return_log[1].pop(return_index)
+                        extracted_return_log[2].pop(return_index)
+                        is_restart = True
                         break
-
+        if is_restart:
+            return book_usage_tracker(extracted_borrow_log, extracted_return_log, day_available)
+    #Book hasn't been returned
+    print(extracted_borrow_log)
+    print(extracted_return_log)
+    if extracted_borrow_log != [[], [], []] and extracted_return_log == [[], [], []]:
+        for index in range(len(extracted_borrow_log[0])):
+            day_borrow = int(extracted_borrow_log[0][index])
+            books_borrow = extracted_borrow_log[2][index]
+            borrow_day = day_available - day_borrow
+            book_stats = book_usage.get(books_borrow)
+            borrow_day_new = book_stats[0] + borrow_day
+            total_possible_borrow = book_stats[1]
+            usage_ratio = borrow_day/total_possible_borrow*100
+            
+            book_usage.update({books_borrow:[borrow_day_new, total_possible_borrow, usage_ratio]})
+            
 def rejected_transaction(day, student, book):
     """
     Add information about the transaction that was not authorized.
@@ -882,7 +908,7 @@ def main():
     calendar = calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available)
     book_usage_initializer(day_available, extracted_addition_log) #Track book usage
     calendar = calendar_activity_update(calendar, day_available, extracted_borrow_log, extracted_return_log)
-    book_usage_tracker(extracted_borrow_log, extracted_return_log) #Track book usage
+    book_usage_tracker(extracted_borrow_log, extracted_return_log, day_available) #Track book usage
     #print 
     output_calendar(calendar)       
     book_usage_manager(is_ratio_sort=True)
