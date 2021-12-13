@@ -1,3 +1,9 @@
+#Tracking variables
+student_borrowing_book = {} # {student: [book_names]} Conditions book name cant be > 3
+maximum_storage = [] # [[books], [quantity], [restricted_type]]
+book_usage = {} # {book: [borrow_days, total_possible_borrow, usage_ratio]}
+reject_borrow_transaction = [[], [], []] # [[day][student][book]]
+
 #Extracting information group
 def read_file(directory):
     """
@@ -132,7 +138,7 @@ def update_storage(calendar, book_available, day):
     - calendar: the calendar that holds all activity
     - book_available: the storage list that contains all the available books' info
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking], [fine_tracker]]}
     - calendar: a new calendar that holds all updated activity
     """
     data = calendar.get(day).copy()
@@ -180,7 +186,15 @@ def get_log_fine(calendar, day):
     return log_fine_list
 
 def add_book_tracking_format(calendar):
+    """
+    Add the book tracking format for the calendar
     
+    Param:
+    - calendar: the calendar that holds all activity
+
+    Return: 
+    - calendar: the updated calendar that holds all activity with the late returner
+    """
     format = [[] for element in range(3)]
     for day in list(calendar.keys()):
         data = calendar.get(day).copy()
@@ -190,61 +204,186 @@ def add_book_tracking_format(calendar):
         
     return calendar
 
+#Tracking functions
+def book_tracker(is_borrow, student, book_name):
+    """
+    Add the book that has been succesfully borrowed or returned into a global dictionary to keep track of what and how many books a student has borrowed. Format: {student: [book_names]}
+    
+    Global:
+    - student_borrowing_book: {student: [book_names]}
+    
+    Param:
+    - is_borrow: True if this is for borrowing book/ False if this is for returning book
+    - student: name of the student who borrow the book
+    - book_name: name of the book that is being borrowed
+    """
+    global student_borrowing_book
+    students = list(student_borrowing_book.keys())
+    if student in students:
+        book_borrowed = student_borrowing_book.get(student)
+        if is_borrow:
+            book_borrowed.append(book_name)
+        else: 
+            book_borrowed.remove(book_name)
+        student_borrowing_book.update({student: book_borrowed})
+    else:
+        student_borrowing_book.update({student: [book_name]})
+
+def book_usage_initializer(day_available):
+    """
+    Initialize book and its usage in a global dictionary to keep track. Format: {book: [borrow_days, total_possible_borrow, usage_ratio]}
+    
+    Global:
+    - maximum_storage: [[books], [quantity], [restricted_type]]
+    - book_usage: {book: [borrow_days, total_possible_borrow, usage_ratio]}
+    
+    Param:
+    - day_available: an int that represent the amount of days the log is available
+    """
+    global book_usage
+    
+    for index in range(len(maximum_storage[0])):
+        book = maximum_storage[0][index]
+        quantity = maximum_storage[1][index]
+        borrow_day = 0
+        total_possible_borrow = day_available*quantity
+        usage_ratio = borrow_day/total_possible_borrow
+        book_usage.update({book:[borrow_day, total_possible_borrow, usage_ratio]})
+
+def book_usage_tracker(extracted_borrow_log, extracted_return_log):
+    """
+    Update books borrow day in a global dictionary to keep track. Format: {book: [borrow_days, total_possible_borrow, usage_ratio]}
+    
+    Global:
+    - maximum_storage: [[books], [quantity], [restricted_type]]
+    - book_usage: {book: [borrow_days, total_possible_borrow, usage_ratio]}
+    
+    Param:
+    - extracted_borrow_log: Format type "B": [[B] [day] [name] [book] [days borrowed for]]
+    - extracted_return_log: Format type "R": [[R] [day] [name] [book]]
+    """
+    global book_usage
+    
+    for borrow_index in range(len(extracted_borrow_log[0])):
+        day_borrow = int(extracted_borrow_log[0][borrow_index])
+        name_borrow = extracted_borrow_log[1][borrow_index]
+        books_borrow = extracted_borrow_log[2][borrow_index]
+        
+        for return_index in range(len(extracted_return_log[0])):
+            day_return = int(extracted_return_log[0][return_index])
+            name_return = extracted_return_log[1][return_index]
+            books_return = extracted_return_log[2][return_index]
+            
+            if day_borrow < day_return:
+                if (name_borrow == name_return) and (books_borrow == books_return) and (name_borrow not in reject_borrow_transaction[1]) and (day_borrow not in reject_borrow_transaction[0]) and (books_borrow not in reject_borrow_transaction[2]):
+                    borrow_day = day_return - day_borrow
+                    book_stats = book_usage.get(books_borrow)
+                    borrow_day_new = book_stats[0] + borrow_day
+                    total_possible_borrow = book_stats[1]
+                    usage_ratio = borrow_day/total_possible_borrow
+                    
+                    book_usage.update({books_borrow:[borrow_day_new, total_possible_borrow, usage_ratio]})
+                    break
+
+def rejected_transaction(day, student, book):
+    """
+    Add information about the transaction that was not authorized.
+    
+    Global:
+    - reject_borrow_transaction: the list of transactions that is not authorized
+    
+    Param:
+    - day: the day of the transaction
+    - student: the name of the student who made the transaction
+    - book: the name of the book that is in the transaction
+    """
+    global reject_borrow_transaction
+    
+    reject_borrow_transaction[0].append(day)
+    reject_borrow_transaction[1].append(student)
+    reject_borrow_transaction[2].append(book)
+    
 #Borrow functions
-def authorization_check(book_storage, book, duration):
+def authorization_check(book_storage, day, book, student, duration, fine_tracker):
     """
     Check if this borrow transaction is allowed.
     It checks for the duration of borrow regarding the restrict guideline and the quantity of available book
     
     Param:
     - book_storage: the available book list
+    - day: the day of the transaction
     - book: the name of the book
-    - day: the day of borrow
+    - student: the name of the person borrowing
     - duration: days borrowed for
+    - fine_tracker: to see who is still having to pay fine before they can borrow any more book
 
     Return: 
     - authorization: True/False that the transaction is allowed
     """  
     authorization = True
+    #Storage and borrow duration
     for index in range(len(book_storage[0])):
         if (book_storage[0][index] == book):
             if book_storage[1][index] == 0:
                 authorization = False
+                rejected_transaction(day, student, book)
             if book_storage[2][index] == "TRUE":
                 if duration > 7:
                     authorization = False
+                    rejected_transaction(day, student, book)
             if book_storage[2][index] == "FALSE":
                 if duration > 28:
                     authorization = False
+                    rejected_transaction(day, student, book)
             break
+    #Pay fine required
+    if fine_tracker != []:
+        for name in list(fine_tracker.keys()):
+            if student == name:
+                authorization = False
+                rejected_transaction(day, student, book)
+    #Check if student is going to borrow more than 3 books
+    if student_borrowing_book != {}:
+        for name in list(student_borrowing_book.keys()):
+            if student == name:
+                book_borrowed = student_borrowing_book.get(student)
+                if len(book_borrowed) >= 3:
+                    authorization = False
+                    rejected_transaction(day, student, book)
     
     return authorization
 
-def book_borrow(storage, book, duration):
+def book_borrow(storage, day, book, student, duration, fine_tracker, is_tracking):
     """
     This function ONLY work when the borrow request PASS the authorization_check. If it does, the transaction is allowed and decrease that book available quantity by 1.
     
     Param:
     - storage: the available book list
+    - day: the day of the transaction
     - book: the name of the book
-    - duration the duration of borrowing
+    - student: the name of the person borrowing
+    - duration: the duration of borrowing
+    - fine_tracker: the list of people that need to pay fine
 
     Return: [[books], [quantity], [restricted_type]]
     - storage_new: a new storage that has the quantity of the book borrowed decreased by 1
     """
-    if authorization_check(storage, book, int(duration)):
+    if authorization_check(storage, day, book, student, int(duration), fine_tracker):
         storage_new = storage.copy()
         storage_new[1] = storage_new[1].copy()
         for book_available_index in range(len(storage[0])):
             book_available = storage_new[0][book_available_index]
             if book_available == book:
+                if is_tracking:
+                    book_tracker(is_borrow=True, student=student, book_name=book)
                 storage_new[1][book_available_index] = int(storage_new[1][book_available_index]) - 1
                 break
+        
         return storage_new
     else:
         return storage
   
-def calendar_borrow_update(calendar, day):
+def calendar_borrow_update(calendar, day, is_tracking):
     """
     Main function that process all borrow activity through each day of the calendar 
     by going through each borrow log of the day and call appropriate actions
@@ -253,19 +392,21 @@ def calendar_borrow_update(calendar, day):
     - calendar: the calendar that holds all activity
     - day: the desired day that will be processed
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking], [fine_tracker] ]}
     - calendar: a new calendar that holds all updated activity
     """
     data_previous = calendar.get(day-1).copy()
     data_current = calendar.get(day).copy()
     storage = data_previous[0].copy()
     if data_current[1] != []:
+        fine_tracker = data_current[6].copy()
         borrow_log = data_current[1].copy()
         extracted_borrow_data = extract_data(borrow_log)
+        students = extracted_borrow_data[1]
         books = extracted_borrow_data[2]
         durations = extracted_borrow_data[3]
         for index in range(len(books)):
-                storage = book_borrow(storage, books[index], int(durations[index]))
+                storage = book_borrow(storage, day, books[index], students[index], int(durations[index]), fine_tracker, is_tracking)
                 calendar = update_storage(calendar, storage, day) 
     else:
         calendar = update_storage(calendar, storage, day)
@@ -273,7 +414,7 @@ def calendar_borrow_update(calendar, day):
     return calendar
 
 #Return functions
-def book_return(storage, book):
+def book_return(storage, student, book, is_tracking):
     """
     This function is used to increase the quantity of book available in storage by 1.
     
@@ -289,11 +430,13 @@ def book_return(storage, book):
     for book_available_index in range(len(storage[0])):
         book_available = storage_new[0][book_available_index]
         if book_available == book:
+            if is_tracking:
+                book_tracker(is_borrow=False, student=student, book_name=book)
             storage_new[1][book_available_index] = int(storage_new[1][book_available_index]) + 1
             break
     return storage_new
 
-def calendar_return_update(calendar, day):
+def calendar_return_update(calendar, day, is_tracking):
     """
     Main function that process all return activity through each day of the calendar 
     by going through each return log of the day and call appropriate actions
@@ -301,8 +444,9 @@ def calendar_return_update(calendar, day):
     Param:
     - calendar: the calendar that holds all activity
     - day: the desired day that will be processed
+    - is_tracking: True if allows tracking/ False: if not allow tracking
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking], [fine_tracker]]}
     - calendar: a new calendar that holds all updated activity
     """
     data_current = calendar.get(day).copy()
@@ -310,9 +454,10 @@ def calendar_return_update(calendar, day):
     if data_current[2] != []:
         return_log = data_current[2].copy()
         extracted_return_data = extract_data(return_log)
+        students = extracted_return_data[1]
         books = extracted_return_data[2]
         for index in range(len(books)):
-                storage = book_return(storage, books[index])
+                storage = book_return(storage, students[index], books[index], is_tracking)
                 calendar = update_storage(calendar, storage, day) 
     else:
         calendar = update_storage(calendar, storage, day)
@@ -358,7 +503,7 @@ def calendar_add_update(calendar, day):
     - calendar: the calendar that holds all activity
     - day: the desired day that will be processed
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking], [fine_tracker]]}
     - calendar: a new calendar that holds all updated activity
     """
     data_current = calendar.get(day).copy()
@@ -422,7 +567,7 @@ def late_return_update(calendar, day, late_tracking_log):
     - day: the desired day that will be processed
     - late_tracking_log: the log that contains late returner's info
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking], [fine_tracker]]}
     - calendar: a new calendar that holds all updated activity
     """
     data_current = calendar.get(day).copy()
@@ -546,7 +691,7 @@ def fine_update(calendar, day, fine_tracker):
     - day: the desired day that will be processed
     - fine_tracker: a dictionary contains student names and the fine left they have to pay
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking], [fine_tracker]]}
     - calendar: a new calendar that holds all updated activity
     """
     data_current = calendar.get(day).copy()
@@ -564,12 +709,32 @@ def fine_update(calendar, day, fine_tracker):
     calendar.update({day:data_current})
     
     return calendar
+
+#Tracking functions
+def maximum_storage_tracker(storage, add_log):
+    """
+    Calculate the maximum book storage the library has. Format: [[books], [quantity], [restricted_type]]
     
+    Param:
+    - storage: the starting storage of the library [[books], [quantity], [restricted_type]]
+    - add_log: the original log when library adding more book. Format: [[day] [book]]
+    """
+    global maximum_storage
+    
+    books = add_log[1]
+    for book in books:
+        storage = book_add(storage, book)
+    for index in range(len(storage[1])):
+        storage[1][index] = int(storage[1][index])
+    
+    maximum_storage = storage
+    
+        
 #Main calendar activity processor
 def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available):
     """
     Create a calendar that will add all the information from logs that are passed in with the day_available length.
-    - Format: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    - Format: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking], [fine_tracker]]}
     
     Param:
     - extracted_book_log = a list of book, quantity and restricted status of the book
@@ -579,7 +744,7 @@ def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_retur
     - extracted_fine_log = a list of comand lines regarding information of people being fined
     - day_available = an int that represent the amount of days the log is available
     
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking], [fine_tracker]]}
     - calendar: a calendar with information
     """
     calendar = {day: [[] for element in range(7)] for day in range(day_available)}
@@ -590,26 +755,36 @@ def calendar_generator(extracted_book_log, extracted_borrow_log, extracted_retur
     calendar = add_book_tracking_format(calendar)
     for day in calendar.keys():
         calendar = update_storage(calendar, extracted_book_log, day)
+    
+    #Maximum storage tracker
+    data = calendar.get(0)
+    storage = data[0]
+    maximum_storage_tracker(storage, extracted_addition_log)
 
     return calendar
 
-def calendar_activity_update(calendar, extracted_borrow_log, extracted_return_log):
+def calendar_activity_update(calendar, day_available, extracted_borrow_log, extracted_return_log):
     """
     Update the calendar completely by going through each activity each day to 
     process the book availability when borrowed, returned, added    
     
     Param:
     - calendar: the calendar that holds all activity
+    - day_available = an int that represent the amount of days the log is available
+    - extracted_borrow_log = a list of command lines regarding information of book being borrowed
+    - extracted_return_log = a list of command lines regarding information of book being returned
 
-    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking] ]}
+    Return: {day : [ [storage], [borrow_log], [return_log], [addition_log], [fine_log], [late_tracking], [fine_tracker]]}
     - calendar: a new calendar that holds all updated activity
     """
     days = list(calendar.keys())
     days.pop(0)
     for day in days:
-        calendar = calendar_borrow_update(calendar, day)
-        calendar  = calendar_return_update(calendar, day)
+        #Initialize all the activities
+        calendar = calendar_borrow_update(calendar, day, is_tracking=True)
+        calendar  = calendar_return_update(calendar, day, is_tracking=True)
         calendar = calendar_add_update(calendar, day)
+        #Start processing all actitvities
         late_tracking_log = late_return_tracker(day, extracted_borrow_log, extracted_return_log)
         calendar = late_return_update(calendar, day, late_tracking_log)
         storage = get_storage(calendar, day)
@@ -617,9 +792,54 @@ def calendar_activity_update(calendar, extracted_borrow_log, extracted_return_lo
         fine_tracker, late_tracking_log = fine_processor(storage, late_tracking_log, log_fine)
         calendar = fine_update(calendar, day, fine_tracker)
         calendar = late_return_update(calendar, day, late_tracking_log)
-        
+                
     return calendar
 
+#Print
+def output_rejected_transaction():
+    print("############################ REJECTED BORROW TRANSACTION ###########################")
+    """
+    Print all rejected borrow transaction
+    """
+    print(list(map(list, zip(*reject_borrow_transaction))))
+    
+def book_usage_manager(is_ratio_sort):
+    """
+    Sort book usage list form highest usage to lowest for borrow day or usage ratio. Format: {book: [borrow_days, total_possible_borrow, usage_ratio]}
+    
+    Global:
+    - book_usage: {book: [borrow_days, total_possible_borrow, usage_ratio]}
+    
+    Param:
+    - is_ratio_sort: True if sort book usage for usage ratio/ False if sort book usage for day borrow
+    
+    Print:
+    - book_ratio_sort: if input True, a dictionary of book sorted by its usage.
+    - book_borrow_sort: if input False, a dictionary of book sorted by its borrowed days.
+    - book_usage: print the total usage information of every books
+    """
+    print("############################ BOOK USAGE ###########################")
+    if is_ratio_sort:
+        book_ratio_sort = {}
+        for book in list(book_usage.keys()):
+            book_info = book_usage.get(book)
+            usage_ratio = book_info[2]
+            book_ratio_sort.update({book: usage_ratio})
+        print(f"Sorted: {dict(sorted(book_ratio_sort.items(), key=lambda item: item[1], reverse=True))}")
+    else:
+        book_borrow_sort = {}
+        for book in list(book_usage.keys()):
+            book_info = book_usage.get(book)
+            borrow_days = book_info[0]
+            book_borrow_sort.update({book: borrow_days})
+        print(f"Sorted: {dict(sorted(book_borrow_sort.items(), key=lambda item: item[1], reverse=True))}")
+    print(f"Details: {book_usage}")
+    
+def output_calendar(calendar):
+    print("############################ CALENDAR ###########################")
+    for key,value in calendar.items():
+        print(key, value)
+        
 #Main part of the program
 def main():
     #Read given information
@@ -634,9 +854,13 @@ def main():
     extracted_fine_log = extract_log_parts(log_fine)
     #Calendar
     calendar = calendar_generator(extracted_book_log, extracted_borrow_log, extracted_return_log, extracted_addition_log, extracted_fine_log, day_available)
-    calendar = calendar_activity_update(calendar, extracted_borrow_log, extracted_return_log)
-    #print
-    for key,value in calendar.items():
-        print(key, value)
+    book_usage_initializer(day_available) #Track book usage
+    book_usage_tracker(extracted_borrow_log, extracted_return_log) #Track book usage
+    calendar = calendar_activity_update(calendar, day_available, extracted_borrow_log, extracted_return_log)
+    #print 
+    output_calendar(calendar)       
+    book_usage_manager(is_ratio_sort=True)
+    book_usage_manager(is_ratio_sort=False)
+    output_rejected_transaction()
 
 main()
