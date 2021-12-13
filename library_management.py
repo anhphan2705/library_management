@@ -308,7 +308,7 @@ def book_usage_tracker(extracted_borrow_log, extracted_return_log, day_available
                         book_stats = book_usage.get(books_borrow)
                         borrow_day_new = book_stats[0] + borrow_day
                         total_possible_borrow = book_stats[1]
-                        usage_ratio = borrow_day/total_possible_borrow*100
+                        usage_ratio = borrow_day_new/total_possible_borrow*100
                         
                         book_usage.update({books_borrow:[borrow_day_new, total_possible_borrow, usage_ratio]})
                         extracted_borrow_log[0].pop(borrow_index)
@@ -333,7 +333,7 @@ def book_usage_tracker(extracted_borrow_log, extracted_return_log, day_available
             book_stats = book_usage.get(books_borrow)
             borrow_day_new = book_stats[0] + borrow_day
             total_possible_borrow = book_stats[1]
-            usage_ratio = borrow_day/total_possible_borrow*100
+            usage_ratio = borrow_day_new/total_possible_borrow*100
             
             book_usage.update({books_borrow:[borrow_day_new, total_possible_borrow, usage_ratio]})
             
