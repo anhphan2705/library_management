@@ -895,8 +895,8 @@ def output_calendar(calendar):
 #Main part of the program
 def main():
     #Read given information
-    log_library = read_file("Final Project\library_management\librarylog-2.txt")
-    log_book = read_file("Final Project\library_management\\booklist-1.txt")
+    log_library = read_file("Final Project\library_management\librarylog-3.txt")
+    log_book = read_file("Final Project\library_management\\booklist-2.txt")
     #Extracting information in to appropriate storing places
     extracted_book_log = extract_log_parts(log_book)
     log_book, log_return, log_addition, log_fine, day_available = read_library_log(log_library)
