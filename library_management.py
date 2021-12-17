@@ -275,6 +275,7 @@ def book_usage_tracker(extracted_borrow_log, extracted_return_log, day_available
     Global:
     - maximum_storage: [[books], [quantity], [restricted_type]]
     - book_usage: {book: [borrow_days, total_possible_borrow, usage_ratio]}
+    - reject_borrow_transaction: [[day][student][book]]
     
     Param:
     - extracted_borrow_log: Format type "B": [[B] [day] [name] [book] [days borrowed for]]
@@ -323,8 +324,6 @@ def book_usage_tracker(extracted_borrow_log, extracted_return_log, day_available
         if is_restart:
             return book_usage_tracker(extracted_borrow_log, extracted_return_log, day_available)
     #Book hasn't been returned
-    print(extracted_borrow_log)
-    print(extracted_return_log)
     if extracted_borrow_log != [[], [], []] and extracted_return_log == [[], [], []]:
         for index in range(len(extracted_borrow_log[0])):
             day_borrow = int(extracted_borrow_log[0][index])
@@ -647,7 +646,7 @@ def book_fine(storage, late_tracking_log):
         late_student = late_tracking_log[0][index]
         late_book = late_tracking_log[1][index]
         late_day = late_tracking_log[2][index]
-        fee_per_day = 2
+        fee_per_day = 1
         for book_index in range(len(storage[0])):
             book = storage[0][book_index]
             restricted_type = storage[2][book_index]
